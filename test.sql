@@ -65,7 +65,7 @@ alter table employee add constraint emp_fk_superssn
     foreign key(super_ssn) references employee(ssn) on delete set null on update cascade;
 
 alter table department add constraint dep_fk_ssn
-    foreign key(mgr_ssn) references employee(ssn) on delete set null on update cascade;
+    foreign key(mgr_ssn) references employee(ssn) on delete cascade on update cascade;
 
 alter table dept_locations add constraint deptloc_fk_dnum
     foreign key (dnumber) references department(dnumber) on delete cascade on update cascade;
@@ -142,3 +142,214 @@ VALUES      (1,'Houston'),
             (5,'Bellaire'),
             (5,'Sugarland'),
             (5,'Houston');
+            
+-- selection 
+
+-- Retrieve the names of all employees who do not have supervisors
+select fname,lname from employee where super_ssn is null;
+
+-- the first nested query selects the project numbers of projects that have an
+-- employee with last name ‘Smith’ involved as manager, whereas the second nested query
+-- selects the project numbers of projects that have an employee with last name ‘Smith’
+-- involved as worker. In the outer query, we use the OR logical connective to retrieve a
+-- PROJECT tuple if the PNUMBER value of that tuple is in the result of either nested query
+
+select pname
+    from project
+    where pnumber in 
+        (select pnumber 
+            from project, employee, department 
+            where ssn = mgr_ssn and dnum = dnumber and lname = 'Smith'
+        )
+        or
+        pnumber in
+        (select pno
+            from works_on, employee
+            where essn = ssn and lname = 'Smith'
+        );
+
+
+select pnumber from project, employee, department where ssn = mgr_ssn and dnum = dnumber;
+select fname, pnumber from project, employee, department where dno = dnumber and dnum = dnumber and lname = 'Smith';
+
+select fname, lname 
+from employee
+where salary > all (
+    select salary
+    from employee, department
+    where dno = dnumber and department = 'Research'
+);
+
+-- Retrieve the name of each employee who has a dependent with the
+-- same first name and is the same sex as the employee
+
+INSERT INTO dependent
+VALUES      (123456789,'John','M','1986-04-04','Person');
+
+select e.fname, e.lname
+from employee as e
+where e.ssn in (
+    select d.ssn
+    from dependent as d
+    where d.dependent_name = e.fname and e.sex = d.sex
+);
+
+select e.fname, e.lname
+from employee as e
+where exists (
+    select*
+    from dependent as d
+    where d.essn = e.ssn and d.dependent_name = e.fname and d.sex = e.sex
+);
+
+-- no dependents
+select e.fname
+from employee
+where not exists (
+    select *
+    from dependent
+    where ssn = essn
+);
+
+-- List the names of managers who have at least one dependent
+
+select e.fname
+from employee as e
+where exists (
+        select *
+        from dependent
+        where ssn = essn
+    )
+    and
+    exists (
+        select *
+        from department
+        where ssn = mgr_ssn
+    )
+;
+
+-- Retrieve the name of each employee who works on 
+-- all the projects controlled by department number 5
+
+-- does not work 
+select fname, lname from employee where ssn in all (
+    select distinct(essn)
+    from works_on
+    where exists
+    (
+        select *
+        from project
+        where dnum = 5 and pno = pnumber
+    )
+);
+
+-- set differnece
+-- except
+-- (S2 - S1)
+-- (project5_dnum - employees_dnum) = ()
+
+insert into works_on values (123456789, 3, 10.25);
+
+select fname, lname 
+from employee 
+where not exists (
+    (
+        select pnumber
+        from project
+        where dnum = 5
+    ) except (
+        select pno
+        from works_on
+        where ssn = essn
+    )
+);
+
+-- alternate approach
+-- :( hard
+
+select fname, lname
+from employee
+where not exists (
+    select *
+    from works_on as a
+)
+
+-- joins
+
+select fname
+from employee 
+join department on dno = dnumber
+where dname = 'Research';
+
+select fname
+from (employeee natural join (department as dept(dname, dno, mssn, mdate)))
+where dname = 'research';
+
+select e.fname as employee_name, s.fname as supervisor_name
+from (employee as e left outer join employee as s on e.super_ssn = s.ssn);
+
+select sum(salary) as sum, max(salary) as maxsal, min(salary) as minsal, avg(salary) as avgsal from employee;
+
+-- Find the sum of the salaries of all employees of the ‘Research’ depart-
+-- ment, as well as the maximum salary, the minimum salary, and the average
+-- salary in this department.
+
+select sum(salary)
+from employee join department on dno = dnumber
+where dname = 'Research';
+
+select count(*)
+from employee join department on dno = dnumber
+where dname = 'Management';
+
+-- group by and having
+
+-- For each department, retrieve the department number, the number
+-- of employees in the department, and their average salary
+
+select dname, count(*) as numbe_of_employees, avg(salary)
+from employee join department on dno = dnumber
+group by dname;
+
+-- For each project, retrieve the project number, the project name, and
+-- the number of employees who work on that project
+
+select pnumber, pname, count(*)
+from project join works_on on pno = pnumber
+group by pnumber;
+
+-- For each project on which more than two employees work, retrieve the
+-- project number, the project name, and the number of employees who work on
+-- the project
+
+select pnumber, pname, count(*)
+from project join works_on on pno = pnumber
+group by pnumber, pname
+having count(*) > 2;
+
+-- For each project, retrieve the project number, the project name, and
+-- the number of employees from department 5 who work on the project.
+
+select pname, pnumber, count(*)
+from project
+join
+works_on on pno = pnumber
+join
+employee on essn = ssn
+group by pname, pnumber;
+
+-- VIEWS --
+
+create or replace view employee_details
+as (
+    select employee.*, dname, pname
+    from employee
+    join
+    works_on on essn = ssn
+    join
+    project on pno = pnumber
+    join
+    department on dno = dnumber
+);
+
+
