@@ -353,3 +353,23 @@ as (
 );
 
 
+create materialized view if not exists employee_details_mat
+as
+ (SELECT employee.fname,
+    employee.lname,
+    employee.ssn,
+    employee.bdate,
+    employee.address,
+    employee.sex,
+    employee.salary,
+    employee.super_ssn,
+    department.dname,
+    project.pname
+   FROM employee
+     JOIN works_on ON works_on.essn = employee.ssn
+     JOIN project ON works_on.pno = project.pnumber
+     JOIN department ON employee.dno = department.dnumber;
+) with no data;
+
+refresh materialized view employee_details_mat;
+
